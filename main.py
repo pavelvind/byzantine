@@ -243,21 +243,253 @@ class Traitor(Scene):
         self.camera.background_color = background_color
 
         # show normal ABC graph
-        graph = setupGraph()
-        self.play(Create(graph), run_time=4)
+        self.graph = setupGraph()
+        self.play(Create(self.graph), run_time=4)
+
+        # shift left
+        self.play(self.graph.animate.shift(2 * LEFT), run_time=1)
+
+        # node values
+        self.node_vals = {'A' : 1, 'B' : 0, 'C' : 1}
+
+        # show node values
+        label = {}
+        for v in self.node_vals:
+            label[v] = Text(str(self.node_vals[v]), font_size=24, color=nodes_color)
+            label[v].next_to(self.graph.vertices[v], buff=0.3, direction=DOWN)
+            self.add(label[v])
+
+        # initialize inbox display (each node starts with its own value)
+        inbox = {}
+        inbox_text = {}
+        inbox_text_group = VGroup()
+        shift = 2.5
+        for v in self.node_vals:
+            inbox[v] = [str(self.node_vals[v])]
+            inbox_text[v] = Text(f"{v} = [{self.node_vals[v]}]", font_size=20, color=nodes_color)
+            inbox_text[v].next_to(self.graph, buff=0.3, direction=RIGHT)
+            inbox_text_group.add(inbox_text[v])
+        inbox_text_group.arrange(DOWN, aligned_edge=LEFT)
+        inbox_text_group.shift(shift * RIGHT)
+        self.play(FadeIn(inbox_text_group), run_time=0.3)
+
+        # send values and update inboxes after each send
+        for v in self.node_vals:
+            others = [d for d in self.node_vals if d != v]
+            msg, dest_pos = self.sendMessage(v, others, color=white)
+            for d in dest_pos:
+                inbox[d].append(str(self.node_vals[v]))
+                # animate message flying from dest node into the inbox text
+                new_text = Text(f"{d} = [{', '.join(inbox[d])}]", font_size=20, color=nodes_color)
+                new_text.move_to(inbox_text[d])
+                self.play(
+                    msg[d].animate.move_to(inbox_text[d].get_center()),
+                    run_time=0.5,
+                )
+                self.play(
+                    FadeOut(msg[d]),
+                    Transform(inbox_text[d], new_text),
+                    run_time=0.4,
+                )
+
+        self.wait(1)
+        
+        # display decision of each node
+        decision_A = Text("= 1", font_size=20, color=nodes_color)
+        decision_A.next_to(inbox_text["A"], buff=0.3, direction=RIGHT)
+        self.play(Write(decision_A), run_time=1)
+
+        decision_B = Text("= 1", font_size=20, color=nodes_color)
+        decision_B.next_to(inbox_text["B"], buff=0.3, direction=RIGHT)
+        self.play(Write(decision_B), run_time=1)
+
+        decision_C = Text("= 1", font_size=20, color=nodes_color)
+        decision_C.next_to(inbox_text["C"], buff=0.3, direction=RIGHT)
+        self.play(Write(decision_C), run_time=1)
+            
         self.wait(1)
 
+        # fadeout inboxes and value labels
+        self.play(FadeOut(inbox_text_group), run_time=0.3)
+        self.play(FadeOut(decision_A), FadeOut(decision_B), FadeOut(decision_C), run_time=0.3)
+        self.play(*[FadeOut(label[v]) for v in label], run_time=0.3)
+        self.wait(1)
+
+        # ----------TRAITOR-----------
         # transform node C into the traitor (devil image)
-        pos_c = graph.vertices["C"].get_center()
+        pos_c = self.graph.vertices["C"].get_center()
 
         devil = ImageMobject("media/images/devil.png")
-        devil.set_width(1.0)
+        devil.set_width(1.5)
         devil.move_to(pos_c)
 
-        # fade out the C node and fade in the devil
+        # build new edges that stop at the devil's border
+        edge_ac = Line(
+            self.graph.vertices["A"].get_center(),
+            devil.get_center(),
+            color=edges_color,
+            stroke_width=3,
+        ).set_length(
+            Line(self.graph.vertices["A"].get_center(), devil.get_center()).get_length()
+            - 0.5 - devil.get_width() / 2
+        )
+        edge_ac.move_to((self.graph.vertices["A"].get_center() + devil.get_center()) / 2)
+
+        edge_bc = Line(
+            self.graph.vertices["B"].get_center(),
+            devil.get_center(),
+            color=edges_color,
+            stroke_width=3,
+        ).set_length(
+            Line(self.graph.vertices["B"].get_center(), devil.get_center()).get_length()
+            - 0.5 - devil.get_width() / 2
+        )
+        edge_bc.move_to((self.graph.vertices["B"].get_center() + devil.get_center()) / 2)
+
+        # fade out C node + old edges, fade in devil + new edges
         self.play(
-            FadeOut(graph.vertices["C"]),
+            FadeOut(self.graph.vertices["C"]),
+            FadeOut(self.graph.edges[("A", "C")]),
+            FadeOut(self.graph.edges[("B", "C")]),
             FadeIn(devil),
+            FadeIn(edge_ac),
+            FadeIn(edge_bc),
             run_time=1.5,
         )
         self.wait(1)
+
+        # --- traitor message passing (same animation, conflicting values) ---
+        # initialize inboxes for A and B only
+        t_inbox = {}
+        t_inbox_text = {}
+        t_inbox_group = VGroup()
+        label = {}
+        for v in ["A", "B"]:
+            label[v] = Text(str(self.node_vals[v]), font_size=24, color=nodes_color)
+            label[v].next_to(self.graph.vertices[v], buff=0.3, direction=DOWN)
+            self.add(label[v])
+            t_inbox[v] = [str(self.node_vals[v])]
+            t_inbox_text[v] = Text(f"{v} = [{self.node_vals[v]}]", font_size=20, color=nodes_color)
+            t_inbox_text[v].next_to(self.graph, buff=0.3, direction=RIGHT)
+            t_inbox_group.add(t_inbox_text[v])
+        traitor_label = Text("?", font_size=24, color=nodes_color)
+        traitor_label.next_to(devil, buff=0.3, direction=DOWN)
+        self.add(traitor_label)
+        t_inbox_group.arrange(DOWN, aligned_edge=LEFT)
+        t_inbox_group.shift(2.5 * RIGHT)
+        self.play(FadeIn(t_inbox_group), run_time=0.3)
+
+        # A sends its value to B (and to C, but we ignore C's inbox)
+        for sender in ["A", "B"]:
+            receiver = "B" if sender == "A" else "A"
+            val = str(self.node_vals[sender])
+            # send to both the other honest node and the devil
+            msg_honest = Text(val, font_size=24, color=white)
+            msg_honest.move_to(self.graph.vertices[sender].get_center())
+            msg_devil = Text(val, font_size=24, color=white)
+            msg_devil.move_to(self.graph.vertices[sender].get_center())
+            self.play(FadeIn(msg_honest), FadeIn(msg_devil), run_time=0.5)
+            self.play(
+                msg_honest.animate.move_to(self.graph.vertices[receiver].get_center()),
+                msg_devil.animate.move_to(devil.get_center()),
+                run_time=1,
+            )
+            self.play(FadeOut(msg_devil), run_time=0.3)
+            # update honest receiver's inbox
+            t_inbox[receiver].append(val)
+            new_text = Text(f"{receiver} = [{', '.join(t_inbox[receiver])}]", font_size=20, color=nodes_color)
+            new_text.move_to(t_inbox_text[receiver])
+            self.play(
+                msg_honest.animate.move_to(t_inbox_text[receiver].get_center()),
+                run_time=0.5,
+            )
+            self.play(
+                FadeOut(msg_honest),
+                Transform(t_inbox_text[receiver], new_text),
+                run_time=0.4,
+            )
+
+        # C (traitor) sends 1 to A and 0 to B
+        msg_to_a = Text("1", font_size=24, color=white)
+        msg_to_a.move_to(devil.get_center())
+        msg_to_b = Text("0", font_size=24, color=white)
+        msg_to_b.move_to(devil.get_center())
+        self.play(FadeIn(msg_to_a), FadeIn(msg_to_b), run_time=0.5)
+        self.play(
+            msg_to_a.animate.move_to(self.graph.vertices["A"].get_center()),
+            msg_to_b.animate.move_to(self.graph.vertices["B"].get_center()),
+            run_time=1,
+        )
+        self.wait(0.5)
+
+        # update A's inbox with "1" from traitor
+        t_inbox["A"].append("1")
+        new_a = Text(f"A = [{', '.join(t_inbox['A'])}]", font_size=20, color=nodes_color)
+        new_a.move_to(t_inbox_text["A"])
+        self.play(
+            msg_to_a.animate.move_to(t_inbox_text["A"].get_center()),
+            run_time=0.5,
+        )
+        self.play(
+            FadeOut(msg_to_a),
+            Transform(t_inbox_text["A"], new_a),
+            run_time=0.4,
+        )
+
+        # update B's inbox with "0" from traitor
+        t_inbox["B"].append("0")
+        new_b = Text(f"B = [{', '.join(t_inbox['B'])}]", font_size=20, color=nodes_color)
+        new_b.move_to(t_inbox_text["B"])
+        self.play(
+            msg_to_b.animate.move_to(t_inbox_text["B"].get_center()),
+            run_time=0.5,
+        )
+        self.play(
+            FadeOut(msg_to_b),
+            Transform(t_inbox_text["B"], new_b),
+            run_time=0.4,
+        )
+        self.wait(1)
+
+        # A decides 1 (majority of [1, 0, 1]), B decides 0 (majority of [0, 1, 0])
+        t_decision_A = Text("= 1", font_size=20, color=nodes_color)
+        t_decision_A.next_to(t_inbox_text["A"], buff=0.3, direction=RIGHT)
+        self.play(Write(t_decision_A), run_time=1)
+
+        t_decision_B = Text("= 0", font_size=20, color=nodes_color)
+        t_decision_B.next_to(t_inbox_text["B"], buff=0.3, direction=RIGHT)
+        self.play(Write(t_decision_B), run_time=1)
+
+        self.wait(1)
+
+        # fadeout
+        self.play(FadeOut(t_inbox_group), run_time=0.3)
+        self.play(FadeOut(t_decision_A), FadeOut(t_decision_B), run_time=0.3)
+        self.wait(1)
+            
+
+
+    def sendMessage(self, source, dest: list, color=white):
+        source_pos = self.graph.vertices[source].get_center()
+
+        # build message objects keyed by destination
+        msg = {}
+        dest_pos = {}
+        for d in dest:
+            dest_pos[d] = self.graph.vertices[d].get_center()
+            val_str = str(self.node_vals[source])
+            msg[d] = Text(val_str, font_size=24, color=color)
+            msg[d].move_to(source_pos)
+
+        # fade in all messages at source
+        self.play(*[FadeIn(msg[d]) for d in dest], run_time=0.5)
+
+        # animate all messages moving to their destinations
+        self.play(*[msg[d].animate.move_to(dest_pos[d]) for d in dest], run_time=1)
+        self.wait(1)
+
+        # return messages still on screen so caller can animate them into inbox
+        return msg, dest_pos
+
+
+        
