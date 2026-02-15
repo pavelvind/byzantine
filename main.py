@@ -238,4 +238,26 @@ def setupGraph():
         },
     )
 
-        
+class Traitor(Scene):
+    def construct(self):
+        self.camera.background_color = background_color
+
+        # show normal ABC graph
+        graph = setupGraph()
+        self.play(Create(graph), run_time=4)
+        self.wait(1)
+
+        # transform node C into the traitor (devil image)
+        pos_c = graph.vertices["C"].get_center()
+
+        devil = ImageMobject("media/images/devil.png")
+        devil.set_width(1.0)
+        devil.move_to(pos_c)
+
+        # fade out the C node and fade in the devil
+        self.play(
+            FadeOut(graph.vertices["C"]),
+            FadeIn(devil),
+            run_time=1.5,
+        )
+        self.wait(1)
